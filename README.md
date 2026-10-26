@@ -6,6 +6,7 @@
 
 <p align="center">
   <img alt="Python: async" src="https://img.shields.io/badge/python-async-3776AB?style=for-the-badge&amp;logo=python&amp;logoColor=white">
+  <img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/cqlsh/aiodrivers/tests.yml?style=for-the-badge&amp;label=tests">
   <img alt="Status: early development" src="https://img.shields.io/badge/status-early%20development-F59E0B?style=for-the-badge">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-22C55E?style=for-the-badge">
 </p>
@@ -14,16 +15,30 @@ Every driver is written from scratch and speaks its database's wire protocol
 directly.
 
 ```python
-from aiodrivers.adapters import PostgreSQL
+import asyncio
+
+from aiodrivers.adapters import SQLite
+
+async def main():
+    database = SQLite('app.db')
+
+    async with await database.connect() as connection:
+        await connection.execute('CREATE TABLE IF NOT EXISTS users (name TEXT)')
+        await connection.execute('INSERT INTO users VALUES (?)', 'ada')
+
+        print(await connection.fetchval('SELECT count(*) FROM users'))
+
+asyncio.run(main())
 ```
 
-Nothing is released yet, and the API is not stable.
+The SQLite driver works and needs Python 3.12 or newer. There is no release on
+PyPI yet, and the API will still change.
 
 ## Roadmap
 
-SQL databases come first, then NoSQL. SQLite is next; everything else is
-planned. Many databases speak another database's wire protocol, so one driver
-covers several of them.
+SQL databases come first, then NoSQL. SQLite is done, PostgreSQL is next, and
+everything after that is planned. Many databases speak another database's wire
+protocol, so one driver covers several of them.
 
 ### SQL
 
@@ -95,6 +110,15 @@ a package without dependencies cannot bring along.
 - If an extension is missing or fails to build, the Python implementation runs
   instead.
 - SQLite has no wire protocol, so its adapter runs `sqlite3` in a worker thread.
+
+## Tests
+
+```bash
+python -m unittest discover -s tests -t .
+```
+
+The tests use the standard library's `unittest`, so there is nothing to
+install.
 
 ## License
 
