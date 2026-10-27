@@ -9,6 +9,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
 license-files = ["LICENSE"]
+authors = [{ name = "cqlsh" }]
 keywords = ["async", "asyncio", "database", "driver"]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
@@ -24,6 +25,10 @@ classifiers = [
 ]
 dependencies = []
 dynamic = ["version"]
+
+[project.urls]
+Repository = "https://github.com/cqlsh/aiodrivers"
+Issues = "https://github.com/cqlsh/aiodrivers/issues"
 
 [tool.setuptools.dynamic]
 version = { attr = "aiodrivers.__version__" }
