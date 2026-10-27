@@ -30,6 +30,9 @@ dynamic = ["version"]
 Repository = "https://github.com/cqlsh/aiodrivers"
 Issues = "https://github.com/cqlsh/aiodrivers/issues"
 
+[dependency-groups]
+dev = ["pyright==1.1.414"]
+
 [tool.setuptools.dynamic]
 version = { attr = "aiodrivers.__version__" }
 
@@ -38,3 +41,8 @@ include = ["aiodrivers*"]
 
 [tool.setuptools.package-data]
 aiodrivers = ["py.typed"]
+
+[tool.pyright]
+include = ["aiodrivers", "tests"]
+typeCheckingMode = "strict"
+pythonVersion = "3.12"
