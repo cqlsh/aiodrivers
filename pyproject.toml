@@ -15,7 +15,7 @@ classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Framework :: AsyncIO",
     "Intended Audience :: Developers",
-    "Operating System :: OS Independent",
+    "Programming Language :: C++",
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -37,12 +37,13 @@ dev = ["pyright==1.1.414"]
 version = { attr = "aiodrivers.__version__" }
 
 [tool.setuptools.packages.find]
-include = ["aiodrivers*"]
+include = ["aiodrivers", "aiodrivers.*"]
 
 [tool.setuptools.package-data]
 aiodrivers = ["py.typed"]
+"aiodrivers._extensions" = ["*.pyi"]
 
 [tool.pyright]
-include = ["aiodrivers", "tests"]
+include = ["aiodrivers"]
 typeCheckingMode = "strict"
 pythonVersion = "3.12"
