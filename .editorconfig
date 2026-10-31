@@ -11,6 +11,9 @@ indent_size = 4
 [*.py]
 max_line_length = 125
 
+[*.{cpp,hpp}]
+indent_size = 2
+
 [*.md]
 trim_trailing_whitespace = false
 
