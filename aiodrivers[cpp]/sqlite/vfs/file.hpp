@@ -62,12 +62,15 @@ class File {
 
   /**
    * @brief Opens a file for reading and closes the one that was open before.
-   * @details If the open fails, the previous file stays open.
-   * @param path UTF-8 path of the file.
+   * @details If the open fails, the previous file stays open. Windows treats path as UTF-8, POSIX passes the bytes through
+   *          unchanged. Folders behave as in SQLite: Windows refuses them with CantOpenIsDir, while POSIX opens them and the
+   *          first TryRead fails with IoErrRead. On POSIX a symbolic link as the last component of path gives CantOpen, so
+   *          resolve links first, as SQLite does.
+   * @param path Path of the file.
    * @retval Ok The file is open.
    * @retval CantOpen The file doesn't exist or can't be opened.
-   * @retval CantOpenIsDir path is a folder.
-   * @retval IoErrNoMem Converting the path failed.
+   * @retval CantOpenIsDir path is a folder (Windows only).
+   * @retval IoErrNoMem Converting the path to UTF-16 failed (Windows only).
    */
   [[nodiscard]] ResultCode TryOpen(const char* path) noexcept;
 
@@ -80,11 +83,15 @@ class File {
    * @retval Ok All bytes were read.
    * @retval IoErrShortRead The file ended first; the rest of buffer is filled with zeros.
    * @retval IoErrRead The read failed.
+   * @retval IoErrCorruptFs The error points to a damaged disk or file system (POSIX only). SQLite turns this into Corrupt
+   *         while a statement runs.
    */
   [[nodiscard]] ResultCode TryRead(std::uint8_t* buffer, std::uint32_t sizeInBytes, std::uint64_t offset) const noexcept;
 
   /**
    * @brief Gets the current size of the file.
+   * @details On POSIX a file of exactly one byte reports size 0, like in SQLite, which writes that byte itself into empty
+   *          databases on FAT drives under macOS.
    * @pre The file is open.
    * @param[out] outSizeInBytes The size in bytes; unchanged on failure.
    * @retval Ok The size was read.
