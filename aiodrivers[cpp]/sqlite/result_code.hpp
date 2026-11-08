@@ -70,7 +70,8 @@ enum class [[nodiscard]] ResultCode : std::int32_t {
   IoErrFstat = IoErr | (7 << 8),
   IoErrNoMem = IoErr | (12 << 8),
   IoErrCorruptFs = IoErr | (33 << 8),
-  CantOpenIsDir = CantOpen | (2 << 8)
+  CantOpenIsDir = CantOpen | (2 << 8),
+  CantOpenFullPath = CantOpen | (3 << 8)
 };
 
 }  // namespace aiodrivers::sqlite
