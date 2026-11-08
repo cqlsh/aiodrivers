@@ -25,6 +25,7 @@ SOFTWARE.
 #if defined(_WIN32)
 
 #include "sqlite/vfs/file.hpp"
+#include "sqlite/vfs/windows/wide_path.hpp"
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -36,10 +37,8 @@ SOFTWARE.
 
 #include <windows.h>
 
-#include <cstddef>
 #include <cstring>
 #include <memory>
-#include <new>
 #include <utility>
 
 namespace aiodrivers::sqlite::vfs {
@@ -90,38 +89,11 @@ class Retry {
   static constexpr DWORD DELAY_IN_MILLISECONDS = 25;
 };
 
-/** @brief Converts UTF-8 paths to the UTF-16 paths the Windows API expects. */
-class WidePath {
- public:
-  WidePath() = delete;
-
-  /**
-   * @brief Converts a path to UTF-16.
-   * @details Invalid UTF-8 becomes U+FFFD, as in SQLite.
-   * @param path Zero-terminated UTF-8 path.
-   * @param[out] output The zero-terminated UTF-16 path; unchanged on failure.
-   * @retval Ok The path was converted.
-   * @retval IoErrNoMem The conversion or the allocation failed.
-   */
-  [[nodiscard]] static ResultCode TryConvert(const char* path, std::unique_ptr<wchar_t[]>& output) noexcept {
-    const int length = ::MultiByteToWideChar(CP_UTF8, 0, path, -1, nullptr, 0);
-    if (length <= 0) {
-      return ResultCode::IoErrNoMem;
-    }
-    std::unique_ptr<wchar_t[]> converted(new (std::nothrow) wchar_t[static_cast<std::size_t>(length)]);
-    if (converted == nullptr || ::MultiByteToWideChar(CP_UTF8, 0, path, -1, converted.get(), length) != length) {
-      return ResultCode::IoErrNoMem;
-    }
-    output = std::move(converted);
-    return ResultCode::Ok;
-  }
-};
-
 }  // namespace
 
 ResultCode File::TryOpen(const char* path) noexcept {
   std::unique_ptr<wchar_t[]> widePath;
-  const ResultCode converted = WidePath::TryConvert(path, widePath);
+  const ResultCode converted = windows::WidePath::TryConvert(path, widePath);
   if (converted != ResultCode::Ok) {
     return converted;
   }
