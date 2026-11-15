@@ -25,6 +25,12 @@ SOFTWARE.
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
+#include "sqlite/bindings/module_state.hpp"
+#include "sqlite/bindings/types/database_header_type.hpp"
+#include "sqlite/bindings/types/database_type.hpp"
+
+#include <new>
+
 namespace aiodrivers::sqlite::bindings {
 
 /**
@@ -47,18 +53,49 @@ class Module {
         .m_base = PyModuleDef_HEAD_INIT,
         .m_name = "aiodrivers._extensions._sqlite",
         .m_doc = nullptr,
-        .m_size = 0,
+        .m_size = static_cast<Py_ssize_t>(sizeof(ModuleState)),
         .m_methods = nullptr,
         .m_slots = slots,
-        .m_traverse = nullptr,
-        .m_clear = nullptr,
-        .m_free = nullptr
+        .m_traverse = &Module::Traverse,
+        .m_clear = &Module::Clear,
+        .m_free = &Module::Free
     };
     return &definition;
   }
 
  private:
-  [[nodiscard]] static int Execute(PyObject*) noexcept { return 0; }
+  [[nodiscard]] static int Execute(PyObject* module) noexcept {
+    auto* const state = new (PyModule_GetState(module)) ModuleState();
+    if (!state->TryImportExceptions()) {
+      return -1;
+    }
+    PyObject* const headerType = types::DatabaseHeaderType::TryCreate();
+    if (headerType == nullptr) {
+      return -1;
+    }
+    state->SetHeaderType(headerType);
+    if (PyModule_AddObjectRef(module, "DatabaseHeader", headerType) != 0) {
+      return -1;
+    }
+    PyObject* const databaseType = types::DatabaseType::TryCreate(module);
+    if (databaseType == nullptr) {
+      return -1;
+    }
+    const int added = PyModule_AddObjectRef(module, "Database", databaseType);
+    Py_DECREF(databaseType);
+    return added;
+  }
+
+  [[nodiscard]] static int Traverse(PyObject* module, visitproc visit, void* argument) noexcept {
+    return ModuleState::Of(module)->Traverse(visit, argument);
+  }
+
+  [[nodiscard]] static int Clear(PyObject* module) noexcept {
+    ModuleState::Of(module)->Clear();
+    return 0;
+  }
+
+  static void Free(void* module) noexcept { ModuleState::Of(static_cast<PyObject*>(module))->Clear(); }
 };
 
 }  // namespace aiodrivers::sqlite::bindings
