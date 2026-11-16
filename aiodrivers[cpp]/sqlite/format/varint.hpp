@@ -24,6 +24,8 @@ SOFTWARE.
 
 #pragma once
 
+#include "core/platform/force_inline.hpp"
+
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -49,7 +51,7 @@ class Varint {
    * @param[out] outValue The decoded value.
    * @return Size of the varint in bytes, 1 to MAX_SIZE.
    */
-  [[nodiscard]] static constexpr std::size_t Read(const std::uint8_t* source, std::uint64_t& outValue) noexcept {
+  [[nodiscard]] static AIODRIVERS_FORCE_INLINE constexpr std::size_t Read(const std::uint8_t* source, std::uint64_t& outValue) noexcept {
     if (IsLast(source[0])) {
       outValue = source[0];
       return 1;
@@ -99,7 +101,7 @@ class Varint {
    * @param[out] outValue The decoded value, at most 0xFFFFFFFF.
    * @return Size of the varint in bytes, 1 to MAX_SIZE.
    */
-  [[nodiscard]] static constexpr std::size_t ReadClamped(const std::uint8_t* source, std::uint32_t& outValue) noexcept {
+  [[nodiscard]] static AIODRIVERS_FORCE_INLINE constexpr std::size_t ReadClamped(const std::uint8_t* source, std::uint32_t& outValue) noexcept {
     if (IsLast(source[0])) {
       outValue = source[0];
       return 1;
