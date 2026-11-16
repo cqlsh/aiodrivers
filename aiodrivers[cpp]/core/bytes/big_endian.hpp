@@ -65,6 +65,22 @@ class BigEndian {
     }
     return value;
   }
+
+  /**
+   * @brief Reads a 64-bit big-endian integer.
+   * @param source Pointer to eight readable bytes.
+   * @return The value in native byte order.
+   */
+  [[nodiscard]] static std::uint64_t ReadUInt64(const std::uint8_t* source) noexcept {
+    std::uint64_t value = 0;
+    std::memcpy(&value, source, sizeof(value));
+    if constexpr (std::endian::native == std::endian::little) {
+      value = (value << 56) | ((value << 40) & 0x00FF000000000000ULL) | ((value << 24) & 0x0000FF0000000000ULL)
+          | ((value << 8) & 0x000000FF00000000ULL) | ((value >> 8) & 0x00000000FF000000ULL) | ((value >> 24) & 0x0000000000FF0000ULL)
+          | ((value >> 40) & 0x000000000000FF00ULL) | (value >> 56);
+    }
+    return value;
+  }
 };
 
 }  // namespace aiodrivers::core::bytes
