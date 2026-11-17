@@ -26,6 +26,7 @@ SOFTWARE.
 
 #include "core/bytes/big_endian.hpp"
 #include "sqlite/pager/page.hpp"
+#include "sqlite/pager/page_cache.hpp"
 #include "sqlite/result_code.hpp"
 #include "sqlite/vfs/file.hpp"
 
@@ -36,6 +37,7 @@ SOFTWARE.
 #include <cstring>
 #include <memory>
 #include <new>
+#include <utility>
 
 namespace aiodrivers::sqlite::btree {
 
@@ -50,12 +52,14 @@ class PayloadReader {
   /**
    * @brief Creates a reader for the overflow chains of one database.
    * @param file The database file; must outlive the reader.
+   * @param cache The page cache of that file; must outlive the reader.
    * @param pageSize Page size in bytes.
    * @param usableSize Usable bytes per page, the page size minus the reserved space.
    * @param pageCount Size of the database in pages, as SQLite's b-tree layer counts it.
    */
-  PayloadReader(const vfs::File& file, std::uint32_t pageSize, std::uint32_t usableSize, std::uint32_t pageCount) noexcept
+  PayloadReader(const vfs::File& file, pager::PageCache& cache, std::uint32_t pageSize, std::uint32_t usableSize, std::uint32_t pageCount) noexcept
       : m_file(&file),
+        m_cache(&cache),
         m_pageSize(pageSize),
         m_usableSize(usableSize),
         m_pageCount(pageCount) {}
@@ -82,9 +86,10 @@ class PayloadReader {
    * @brief Copies amount bytes of the payload, starting at offset, into output.
    * @details Works like SQLite's accessPayload, error paths included; a chain that loops back just repeats its content there
    *          too. An overflow page needed from its first byte, after at least 4 bytes of output, is read straight from the
-   *          file into output and only as far as needed, like SQLite's direct overflow read. If the file ends before that,
-   *          the result is IoErrShortRead. Other overflow pages go through a page buffer, where a short read gives zeros, as
-   *          in SQLite's pager. Autovacuum pointer maps aren't used to skip pages yet.
+   *          file into output and only as far as needed, like SQLite's direct overflow read; it doesn't go into the cache. If
+   *          the file ends before that, the result is IoErrShortRead. Other overflow pages come from the page cache and stay
+   *          pinned only while they're read. A short read gives zeros there, as in SQLite's pager. Autovacuum pointer maps
+   *          aren't used to skip pages yet.
    * @pre SetCell was called, and offset + amount doesn't exceed the payload size.
    * @param offset Position in the payload to start at.
    * @param amount Number of bytes to copy.
@@ -92,7 +97,7 @@ class PayloadReader {
    * @retval Ok All bytes were copied.
    * @retval Corrupt The local part runs past the usable area of the page, a page number in the chain is larger than the
    *         page count, or the chain ends before the payload does.
-   * @retval NoMem The list of chain pages couldn't grow.
+   * @retval NoMem The list of chain pages or the page cache couldn't grow.
    * @retval IoErrShortRead The file ends inside an overflow page that was read directly.
    * @retval IoErrRead Reading an overflow page failed.
    * @retval IoErrCorruptFs Reading failed with an error that points to a damaged disk or file system (POSIX only).
@@ -140,7 +145,7 @@ class PayloadReader {
         if (offset == 0 && static_cast<std::size_t>(output - start) >= NEXT_PAGE_SIZE) {
           result = TryReadDirectly(next, chunk, output, next);
         } else {
-          result = TryReadThroughPage(next, offset, chunk, output, next);
+          result = TryReadFromCache(next, offset, chunk, output, next);
         }
         offset = 0;
         amount -= chunk;
@@ -178,8 +183,9 @@ class PayloadReader {
       outNext = m_chain[index + 1];
       return ResultCode::Ok;
     }
-    const ResultCode result = m_overflowPage.TryRead(*m_file, pageNumber, m_pageSize);
-    outNext = result == ResultCode::Ok ? core::bytes::BigEndian::ReadUInt32(m_overflowPage.GetBytes()) : 0;
+    pager::PageCache::Reference page;
+    const ResultCode result = m_cache->TryFetch(pageNumber, page);
+    outNext = result == ResultCode::Ok ? core::bytes::BigEndian::ReadUInt32(page.GetPage().GetBytes()) : 0;
     return result;
   }
 
@@ -193,13 +199,15 @@ class PayloadReader {
     return result;
   }
 
-  [[nodiscard]] ResultCode TryReadThroughPage(
+  [[nodiscard]] ResultCode TryReadFromCache(
       std::uint32_t pageNumber, std::uint32_t offset, std::uint32_t chunk, std::uint8_t* output, std::uint32_t& outNext
   ) noexcept {
-    const ResultCode result = m_overflowPage.TryRead(*m_file, pageNumber, m_pageSize);
+    pager::PageCache::Reference page;
+    const ResultCode result = m_cache->TryFetch(pageNumber, page);
     if (result == ResultCode::Ok) {
-      outNext = core::bytes::BigEndian::ReadUInt32(m_overflowPage.GetBytes());
-      std::memcpy(output, m_overflowPage.GetBytes() + NEXT_PAGE_SIZE + offset, chunk);
+      const std::uint8_t* const bytes = page.GetPage().GetBytes();
+      outNext = core::bytes::BigEndian::ReadUInt32(bytes);
+      std::memcpy(output, bytes + NEXT_PAGE_SIZE + offset, chunk);
     }
     return result;
   }
@@ -207,6 +215,7 @@ class PayloadReader {
   static constexpr std::uint32_t NEXT_PAGE_SIZE = 4;
 
   const vfs::File* m_file = nullptr;
+  pager::PageCache* m_cache = nullptr;
   std::uint32_t m_pageSize = 0;
   std::uint32_t m_usableSize = 0;
   std::uint32_t m_pageCount = 0;
@@ -217,7 +226,6 @@ class PayloadReader {
   bool m_isChainKnown = false;
   std::unique_ptr<std::uint32_t[]> m_chain;
   std::uint32_t m_chainCapacity = 0;
-  pager::Page m_overflowPage;
 };
 
 }  // namespace aiodrivers::sqlite::btree
